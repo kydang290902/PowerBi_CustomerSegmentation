@@ -1,0 +1,116 @@
+1. Calculated Column
+
+DateLastPurchase = CALCULATE(MAX(Sales[OrderDate]),FILTER(Sales,EARLIER(Customers[CustomerKey]) = Sales[CustomerKey]))
+
+Recency = 
+VAR NgayCuoiMuaHang = CALCULATE(MAX(Sales[OrderDate]),FILTER(Sales,EARLIER(Customers[CustomerKey]) = Sales[CustomerKey]))
+VAR NgayGanNhat = CALCULATE(MAX(Sales[OrderDate]),ALL(Sales))
+RETURN
+    DATEDIFF(NgayCuoiMuaHang,NgayGanNhat,DAY)
+
+
+Frequency = 
+CALCULATE(DISTINCTCOUNT(Sales[SalesOrderNumber]),
+FILTER(Sales,EARLIER(Customers[CustomerKey]) = Sales[CustomerKey]))
+
+Monetary = CALCULATE(SUM(Sales[SalesAmount]),FILTER(Sales,EARLIER(Customers[CustomerKey]) = Sales[CustomerKey]))
+
+R SCORE = 
+VAR Q1 = PERCENTILE.EXC(Customers[Recency],0.2)
+VAR Q2 = PERCENTILE.EXC(Customers[Recency],0.4)
+VAR Q3 = PERCENTILE.EXC(Customers[Recency],0.6)
+VAR Q4 = PERCENTILE.EXC(Customers[Recency], 0.8)
+RETURN
+    		IF(Customers[Recency] < Q1,5,
+        		IF(Customers[Recency] < Q2 , 4,
+            			IF(Customers[Recency] < Q3, 3,
+                			IF(Customers[Recency] < Q4,2,1))))
+
+F SCORE = 
+VAR Q1 = PERCENTILE.EXC(Customers[Frequency],0.2)
+VAR Q2 = PERCENTILE.EXC(Customers[Frequency],0.4)
+VAR Q3 = PERCENTILE.EXC(Customers[Frequency],0.6)
+VAR Q4 = PERCENTILE.EXC(Customers[Frequency],0.8)
+RETURN
+    		IF(Customers[Frequency] > Q4,5,
+        		IF(Customers[Frequency] > Q3 , 4,
+            			IF(Customers[Frequency] > Q2, 3,
+                		IF(Customers[Frequency] > Q1, 2,1))))
+
+M SCORE = 
+VAR Q1 = PERCENTILE.EXC(Customers[Monetary],0.2)
+VAR Q2 = PERCENTILE.EXC(Customers[Monetary],0.4)
+VAR Q3 = PERCENTILE.EXC(Customers[Monetary],0.6)
+VAR Q4 = PERCENTILE.EXC(Customers[Monetary],0.8)
+RETURN
+    		IF(Customers[Monetary] > Q4,5,
+        		IF(Customers[Monetary]> Q3 , 4,
+            			IF(Customers[Monetary] > Q2, 3,
+                			IF(Customers[Monetary] > Q1, 2,1))))
+
+
+FM SCORE = 
+CEILING((Customers[F SCORE] + Customers[M SCORE])/2, 1)
+
+
+RFM SCORE = 
+    	Customers[R SCORE]&Customers[FM SCORE]
+
+Segment = 
+    	VAR segments = 
+        LOOKUPVALUE(Segment[segment],Segment[RFM],Customers[RFM SCORE])
+RETURN
+    		IF(ISBLANK(segments),"Other",segments)
+
+
+2.	Measure
+
+%Revenue = SUM(Sales[SalesAmount])/CALCULATE(SUM(Sales[SalesAmount]),ALL(Sales))
+
+Tính toán Measure Pareto Cách 1 (Measure này dùng để tính toán doanh thu tích lũy theo segment)
+
+Pareto = 
+VAR TotalAmount = SUM(Sales[SalesAmount])
+VAR DoanhThuTichLuy = 
+        SUMX(
+             FILTER(
+                 SUMMARIZE(ALL(Sales),Customers[Segment],"Revenue",SUM(Sales[SalesAmount])),
+                 [Revenue] >= TotalAmount
+        ),
+        [Revenue])
+VAR TotalRevenue = CALCULATE(SUM(Sales[SalesAmount]),ALL(Sales))
+RETURN
+    		DIVIDE(DoanhThuTichLuy,TotalRevenue)
+
+
+Tính toán Measure Pareto Cách 2 
+ParetoByWindow2 = 
+
+VAR RevenuePareto = 
+SUMX(WINDOW(1, ABS, 0, REL, ALLSELECTED(Customers[Segment]), ORDERBY([Revenue], DESC)), [Revenue])
+   	VAR AllRevenue = 
+    		CALCULATE(SUM(Sales[SalesAmount]), ALL(Sales))
+  	RETURN
+    		RevenuePareto/AllRevenue
+
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
